@@ -1341,6 +1341,23 @@ static char *build_register_json(void) {
                          : "Clear the image and bring back the animation and "
                            "the agent's name.",
                     nullptr, nullptr);
+        // A command exists for Muse only if the board advertises it here as
+        // well as handling it in on_ws_command(); without this the client
+        // never learns the name.
+        cJSON *text_required = cJSON_CreateObject();
+        cJSON *text_param = cJSON_CreateObject();
+        cJSON_AddStringToObject(text_param, "type", "string");
+        cJSON_AddStringToObject(text_param, "description",
+                                "Short line to show, up to 48 characters. "
+                                "Empty clears it and returns the line to the "
+                                "agent's name.");
+        cJSON_AddItemToObject(text_required, "text", text_param);
+        add_command(commands, "display.show_text",
+                    "Show a short line of text in place of the agent's name. "
+                    "One centred line; the panel's title font is small, so "
+                    "this suits short status tokens rather than prose. Use "
+                    "display.draw_url for anything longer.",
+                    text_required, nullptr);
     }
 #endif
 

@@ -147,11 +147,7 @@ static const char *TAG = "link.led";
 #define LCD_V_RES        320    // portrait; status bars draw in this space
 #define LCD_X_GAP        0
 #define LCD_BAR_ROWS     10
-// The avatar is drawn at its native pixel size: a 240-wide panel has room for
-// it, and any upscale is visibly blocky (the LCD has no smoothing). Generate
-// the avatar at HAPPY_ANIM_WIDTH x HAPPY_ANIM_HEIGHT to match; see
-// tools/gen_sheet_anim.py and the profile in devices/README.md.
-#define LCD_ANIM_SCALE   1
+#define LCD_ANIM_SCALE   3
 #define LCD_DOT_MARGIN   4
 // Draw buffers are sent by SPI DMA.
 #define LCD_BUF_CAPS     MALLOC_CAP_DMA
