@@ -1864,6 +1864,21 @@ static cJSON *on_ws_command(
         cJSON_AddBoolToObject(result, "ok", true);
         return result;
     }
+    if (strcmp(command, "display.show_text") == 0) {
+        /* The on-screen title: one short line, centred above the avatar, in
+         * the same pixel font the agent name uses. It is what a status-screen
+         * board has room for; longer prose belongs on a UI board, which has
+         * wrapping labels. An empty or missing string clears it and gives the
+         * line back to the agent name. */
+        cJSON *text = cJSON_GetObjectItem(params, "text");
+        if (text && !cJSON_IsString(text)) {
+            return command_error("bad_param", "text must be a string");
+        }
+        led_status_set_title(cJSON_IsString(text) ? text->valuestring : NULL);
+        cJSON *result = cJSON_CreateObject();
+        cJSON_AddBoolToObject(result, "ok", true);
+        return result;
+    }
 #endif
 #if CONFIG_MUSE_WATCHER_CAMERA
     if (strcmp(command, "camera.capture") == 0) {
