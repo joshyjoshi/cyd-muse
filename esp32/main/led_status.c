@@ -147,7 +147,11 @@ static const char *TAG = "link.led";
 #define LCD_V_RES        320    // portrait; status bars draw in this space
 #define LCD_X_GAP        0
 #define LCD_BAR_ROWS     10
-#define LCD_ANIM_SCALE   3
+// The avatar is drawn at its native pixel size: a 240-wide panel has room for
+// it, and any upscale is visibly blocky (the LCD has no smoothing). Generate
+// the avatar at HAPPY_ANIM_WIDTH x HAPPY_ANIM_HEIGHT to match; see
+// tools/gen_sheet_anim.py and the profile in devices/README.md.
+#define LCD_ANIM_SCALE   1
 #define LCD_DOT_MARGIN   4
 // Draw buffers are sent by SPI DMA.
 #define LCD_BUF_CAPS     MALLOC_CAP_DMA
@@ -518,8 +522,23 @@ static void led_hw_set_color(rgb_t c) {
     if (!s_panel) return;
     if (s_dot_drawn) lcd_draw_dot(false);
     if (s_bars_drawn && memcmp(&c, &s_bar_color, sizeof(c)) == 0) return;
+#if CONFIG_HOMEHUB_LED_BACKEND_CYD_ILI9341
+    /* The shared palette peaks at LCD_FULL_LEVEL (80) because it is tuned for
+     * a bright addressable LED, not a backlit LCD. On the CYD those values
+     * read as muddy, so scale to full range here; a black stays black. */
+    rgb_t out = c;
+    if (c.r || c.g || c.b) {
+        uint8_t hi = c.r > c.g ? c.r : c.g;
+        if (c.b > hi) hi = c.b;
+        out.r = (uint8_t)((c.r * 255) / hi);
+        out.g = (uint8_t)((c.g * 255) / hi);
+        out.b = (uint8_t)((c.b * 255) / hi);
+    }
+    uint16_t px = lcd_px(out);
+#else
     uint16_t px = lcd_px((rgb_t){to_full_scale(c.r), to_full_scale(c.g),
                                     to_full_scale(c.b)});
+#endif
     for (int i = 0; i < LCD_H_RES * LCD_BAR_ROWS; i++) s_bar_buf[i] = px;
     xSemaphoreTake(s_lcd_lock, portMAX_DELAY);
     bool ok = lcd_draw(0, 0, LCD_H_RES, LCD_BAR_ROWS, s_bar_buf) &&
@@ -551,7 +570,12 @@ static void led_hw_set_title(const char *text) {
     int w = n > 0 ? n * adv * scale - scale : 0;
     int x0 = (LCD_H_RES - w) / 2;
     int y0 = (LCD_TITLE_ROWS - PIXEL_FONT_HEIGHT * scale) / 2;
+#if CONFIG_HOMEHUB_LED_BACKEND_CYD_ILI9341
+    // Pure white on the CYD: the cream reads dull against the dim palette.
+    uint16_t fg = lcd_px((rgb_t){0xff, 0xff, 0xff});
+#else
     uint16_t fg = lcd_px((rgb_t){0xff, 0xee, 0xde});  // animation's cream
+#endif
 
     for (int sy = 0; sy < LCD_TITLE_ROWS; sy += LCD_TITLE_STRIPE_ROWS) {
         for (int r = 0; r < LCD_TITLE_STRIPE_ROWS; r++) {
@@ -668,6 +692,35 @@ static esp_err_t lcd_panel_init(void) {
     if (err == ESP_OK) err = esp_lcd_panel_swap_xy(s_panel, true);
     if (err == ESP_OK) err = esp_lcd_panel_set_gap(s_panel, 0, 0);
     if (err == ESP_OK) err = esp_lcd_panel_mirror(s_panel, false, false);
+
+    // Contrast. The generic ILI9341 init runs the charge pump at a low level
+    // and with flat gamma, which reads washed out on this panel. These are the
+    // CYD values TFT_eSPI and Adafruit use: a higher pump voltage (0x23), VCOM
+    // 0x3E, and a steeper gamma curve. Sent as raw commands because the driver
+    // exposes no API for them.
+    static const struct {
+        uint8_t cmd;
+        uint8_t len;
+        uint8_t data[15];
+    } contrast_cmds[] = {
+        {0xC0, 1, {0x23}},                     // power control 1: pump voltage
+        {0xC1, 1, {0x10}},                     // power control 2
+        {0xC5, 2, {0x3E, 0x28}},               // VCOM 1
+        {0xC7, 1, {0x86}},                     // VCOM 2
+        {0xE0, 15, {0x00, 0x1B, 0x02, 0x05, 0x07, 0x05, 0x3E, 0x29,
+                    0x4A, 0x0D, 0x12, 0x13, 0x2F, 0x36, 0x0F}},   // +gamma
+        {0xE1, 15, {0x00, 0x20, 0x03, 0x09, 0x0A, 0x07, 0x30, 0x36,
+                    0x4A, 0x08, 0x0C, 0x0C, 0x2E, 0x32, 0x0F}},   // -gamma
+    };
+    for (size_t i = 0; i < sizeof(contrast_cmds) / sizeof(contrast_cmds[0]); i++) {
+        esp_err_t ce = esp_lcd_panel_io_tx_param(
+            io, contrast_cmds[i].cmd, contrast_cmds[i].data,
+            contrast_cmds[i].len);
+        if (ce != ESP_OK) {
+            ESP_LOGW("led", "contrast command 0x%02X rejected: %s",
+                     contrast_cmds[i].cmd, esp_err_to_name(ce));
+        }
+    }
 #else
     if (err == ESP_OK) err = esp_lcd_panel_invert_color(s_panel, true);
     if (err == ESP_OK) err = esp_lcd_panel_set_gap(s_panel, LCD_X_GAP, 0);
