@@ -661,7 +661,13 @@ static esp_err_t lcd_panel_init(void) {
     // The CYD panel renders correctly without inversion under the ILI9341
     // driver (verified with TFT_eSPI on this board; the 2-USB revision is
     // often reported as ST7789, but this unit is an ILI9341).
-    err = esp_lcd_panel_set_gap(s_panel, LCD_X_GAP, 0);
+    //
+    // This panel's native scan is landscape (320 wide, 240 tall). The CYD is
+    // used upright, so swap the axes to get 240x320 portrait; the offsets keep
+    // the visible area flush with the bezel after the swap.
+    if (err == ESP_OK) err = esp_lcd_panel_swap_xy(s_panel, true);
+    if (err == ESP_OK) err = esp_lcd_panel_set_gap(s_panel, 0, 0);
+    if (err == ESP_OK) err = esp_lcd_panel_mirror(s_panel, false, false);
 #else
     if (err == ESP_OK) err = esp_lcd_panel_invert_color(s_panel, true);
     if (err == ESP_OK) err = esp_lcd_panel_set_gap(s_panel, LCD_X_GAP, 0);
