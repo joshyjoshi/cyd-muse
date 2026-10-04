@@ -29,7 +29,8 @@
 #   reterminal-e1002
 #              Seeed reTerminal E1002 (ESP32-S3) with a 7.3 inch colour e-paper
 #   cyd        Sunton ESP32-2432S028 "Cheap Yellow Display" (classic ESP32)
-#              with a 2.8 inch ILI9341 and XPT2046 touch, 4 MB flash
+#              with a 2.8 inch ILI9341, 4 MB flash; status-LED profile (no UI)
+#   cyd-ui     the same board running the full UI with XPT2046 touch
 #
 # The action defaults to build. Without PORT, flash and monitor use the only
 # matching serial port, if there is exactly one.
@@ -52,12 +53,15 @@ case "$BOARD" in
     TARGET=esp32c5
     PORTS="/dev/cu.usbmodem* /dev/ttyACM*"
     ;;
-  ideaspark|sensecap-indicator|cyd)
+  ideaspark|sensecap-indicator|cyd|cyd-ui)
     case "$BOARD" in
-      ideaspark|cyd) TARGET=esp32 ;;
-      *)             TARGET=esp32s3 ;;
+      ideaspark|cyd|cyd-ui) TARGET=esp32 ;;
+      *)                    TARGET=esp32s3 ;;
     esac
-    DEFAULTS="$DEFAULTS;devices/sdkconfig.$BOARD"
+    case "$BOARD" in
+      cyd-ui) DEFAULTS="$DEFAULTS;devices/sdkconfig.muse;devices/sdkconfig.muse-cyd" ;;
+      *)      DEFAULTS="$DEFAULTS;devices/sdkconfig.$BOARD" ;;
+    esac
     # CH340 bridge. The SenseCAP Indicator's RP2040 shows up as a usbmodem, not here.
     PORTS="/dev/cu.usbserial-* /dev/cu.wchusbserial* /dev/ttyUSB*"
     ;;

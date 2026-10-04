@@ -1,0 +1,51 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Sunton ESP32-2432S028 "Cheap Yellow Display" (CYD): ESP32-D0WD-V3, 4 MB
+# flash, NO PSRAM, 2.8" 240x320 ILI9341 SPI LCD, XPT2046 touch on its own
+# SPI bus, no microphone or speaker, CH340 USB-UART bridge. Load last, after
+# sdkconfig.muse.
+CONFIG_IDF_TARGET="esp32"
+CONFIG_MUSE_BOARD_CYD=y
+
+# Signed apps without Secure Boot use the Secure Boot V2 (RSA) scheme, which
+# the ESP32 supports from chip revision 3.0 (the D0WD-V3 is one).
+CONFIG_ESP32_REV_MIN_3=y
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+
+# The reference partitions.csv ends at 4.13 MB (two 2 MB OTA slots plus
+# prod_data/prod_bak at fixed offsets) and cannot fit. This profile uses a
+# single 3.875 MB app slot: no dual-OTA, no rollback, flash-over-USB only.
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_cyd_4mb.csv"
+
+# No PSRAM. mbedtls and every PSRAM-preferred buffer fall back to internal RAM,
+# and the voice task's stack has nowhere to go, so voice is off entirely.
+CONFIG_SPIRAM=n
+CONFIG_HOMEHUB_VOICE=n
+CONFIG_HOMEHUB_TUNNEL=n
+
+# Release the classic Bluetooth controller memory; pairing is BLE only.
+CONFIG_BTDM_CTRL_MODE_BLE_ONLY=y
+CONFIG_BTDM_CTRL_MODE_BR_EDR_ONLY=n
+CONFIG_BTDM_CTRL_MODE_BTDM=n
+
+# OTA is impossible with a single app slot.
+CONFIG_HOMEHUB_OTA_ENABLED=n
+
+# On the UI board the status LED backend is unused; the screen is the UI.
+# The CYD's discrete active-LOW RGB LED stays available for the backlight
+# PWM path only.
+CONFIG_HOMEHUB_LED_BACKEND_NONE=y
