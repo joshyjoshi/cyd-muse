@@ -46,6 +46,10 @@
 #include "driver/spi_master.h"
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_panel_st7789.h"
+#elif CONFIG_HOMEHUB_LED_BACKEND_CYD_ILI9341
+#include "driver/spi_master.h"
+#include "esp_lcd_panel_io.h"
+#include "esp_lcd_ili9341.h"
 #else
 #include "driver/i2c_master.h"
 #include "esp_lcd_panel_rgb.h"
@@ -118,6 +122,30 @@ static const char *TAG = "link.led";
 #define LCD_V_RES        320
 // The 170-column panel sits in the middle of the controller's 240 columns.
 #define LCD_X_GAP        35
+#define LCD_BAR_ROWS     10
+#define LCD_ANIM_SCALE   3
+#define LCD_DOT_MARGIN   4
+// Draw buffers are sent by SPI DMA.
+#define LCD_BUF_CAPS     MALLOC_CAP_DMA
+#elif CONFIG_HOMEHUB_LED_BACKEND_CYD_ILI9341
+// Sunton ESP32-2432S028 "Cheap Yellow Display" (2-USB variant): 240x320
+// ILI9341 on SPI, no status LED. Pins from the board silkscreen and the
+// community pinout (witnessmenow/ESP32-Cheap-Yellow-Display), verified on
+// hardware. Note the touch controller is on a SEPARATE SPI bus (VSPI, CLK 25 /
+// MOSI 32 / MISO 39 / CS 33); this backend only drives the panel, so the
+// status bars do not use touch.
+#define LCD_NAME         "CYD ILI9341"
+#define LCD_HOST         SPI2_HOST
+#define LCD_PIN_SCLK     14
+#define LCD_PIN_MOSI     13
+#define LCD_PIN_CS       15
+#define LCD_PIN_DC       2
+#define LCD_PIN_RST      -1     // tied to the board's EN, no GPIO
+#define LCD_PIN_BL       21     // active high
+#define LCD_PCLK_HZ      (40 * 1000 * 1000)
+#define LCD_H_RES        240
+#define LCD_V_RES        320    // portrait; status bars draw in this space
+#define LCD_X_GAP        0
 #define LCD_BAR_ROWS     10
 #define LCD_ANIM_SCALE   3
 #define LCD_DOT_MARGIN   4
@@ -377,7 +405,7 @@ static bool s_dot_drawn = false;
 static bool s_image_mode = false;
 static const uint8_t s_dot_rows[LCD_DOT_CELLS] = {0x6, 0xf, 0xf, 0x6};
 
-#if CONFIG_HOMEHUB_LED_BACKEND_IDEASPARK_ST7789
+#if CONFIG_HOMEHUB_LED_BACKEND_IDEASPARK_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_CYD_ILI9341
 static SemaphoreHandle_t s_draw_done = NULL;
 
 static bool lcd_draw_done(esp_lcd_panel_io_handle_t io,
@@ -590,7 +618,7 @@ static void anim_task(void *arg) {
     }
 }
 
-#if CONFIG_HOMEHUB_LED_BACKEND_IDEASPARK_ST7789
+#if CONFIG_HOMEHUB_LED_BACKEND_IDEASPARK_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_CYD_ILI9341
 static esp_err_t lcd_panel_init(void) {
     s_draw_done = xSemaphoreCreateBinary();
     if (!s_draw_done) return ESP_ERR_NO_MEM;
@@ -622,11 +650,22 @@ static esp_err_t lcd_panel_init(void) {
     if (err == ESP_OK) {
         err = esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)LCD_HOST, &io_cfg, &io);
     }
+#if CONFIG_HOMEHUB_LED_BACKEND_CYD_ILI9341
+    if (err == ESP_OK) err = esp_lcd_new_panel_ili9341(io, &panel_cfg, &s_panel);
+#else
     if (err == ESP_OK) err = esp_lcd_new_panel_st7789(io, &panel_cfg, &s_panel);
+#endif
     if (err == ESP_OK) err = esp_lcd_panel_reset(s_panel);
     if (err == ESP_OK) err = esp_lcd_panel_init(s_panel);
+#if CONFIG_HOMEHUB_LED_BACKEND_CYD_ILI9341
+    // The CYD panel renders correctly without inversion under the ILI9341
+    // driver (verified with TFT_eSPI on this board; the 2-USB revision is
+    // often reported as ST7789, but this unit is an ILI9341).
+    err = esp_lcd_panel_set_gap(s_panel, LCD_X_GAP, 0);
+#else
     if (err == ESP_OK) err = esp_lcd_panel_invert_color(s_panel, true);
     if (err == ESP_OK) err = esp_lcd_panel_set_gap(s_panel, LCD_X_GAP, 0);
+#endif
     return err;
 }
 
@@ -1188,7 +1227,7 @@ static bool lcd_draw_image_rect(int x, int y, int w, int h, const void *pixels) 
         s_image_mode = true;
         lcd_clear_rows(0, LCD_V_RES);
     }
-#if CONFIG_HOMEHUB_LED_BACKEND_IDEASPARK_ST7789
+#if CONFIG_HOMEHUB_LED_BACKEND_IDEASPARK_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_CYD_ILI9341
     // Already in the panel's format; copied only to reach DMA memory.
     memcpy(s_anim_buf, pixels, (size_t)w * h * sizeof(uint16_t));
 #else

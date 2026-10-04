@@ -1,0 +1,44 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# CYD (ESP32-2432S028) 4 MB partition table — single app slot.
+#
+# Name,    Type, SubType, Offset,   Size,    Flags
+#
+# This exists ONLY to fit the Sunton ESP32-2432S028 "Cheap Yellow Display",
+# which has 4 MB of flash. The stock partitions.csv ends at 4.13 MB (two 2 MB
+# OTA slots then prod_data/prod_bak at fixed offsets), which cannot fit.
+#
+# WHAT IS LOST vs the reference layout:
+#   - No ota_1: there is exactly ONE app slot, in `factory` rather than `ota_0`.
+#     Dual-OTA and automatic rollback are gone. OTA updates are also off by
+#     default on non-UI builds, so in practice this board is flash-over-USB only.
+#   - prod_data/prod_bak are dropped entirely. They are written during
+#     manufacturing and Muse never writes them on a hobby board, but the app
+#     may expect the `prod_data` partition handle to exist; if it probes for
+#     them at boot, watch the log.
+#
+# Because there is no ota_0/ota_1 pair, the app runs as `factory` and must be
+# built with OTA disabled (CONFIG_HOMEHUB_OTA_ENABLED=n, which is the default
+# for non-UI boards).
+#
+# Offsets: nvs/otadata/phy_init keep the reference values (0x11000, 0x17000,
+# 0x19000) so they sit after the enlarged bootloader at the 0x10000 table
+# offset. The app starts at 0x20000 to stay 8 KB-aligned and clear of phy_init.
+#
+# Space available to the app: 0x3E0000 = 3.875 MB.
+nvs,       data, nvs,     0x11000,  0x6000,
+otadata,   data, ota,     0x17000,  0x2000,
+phy_init,  data, phy,     0x19000,  0x1000,
+factory,   app,  factory, 0x20000,  0x3E0000,

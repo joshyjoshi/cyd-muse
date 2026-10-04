@@ -184,6 +184,10 @@ menu "ESP32 Device SDK"
         config HOMEHUB_LED_BACKEND_IDEASPARK_ST7789
             bool "ideaspark ESP32 1.9 inch ST7789 display (status bars)"
 
+        config HOMEHUB_LED_BACKEND_CYD_ILI9341
+            bool "Sunton ESP32-2432S028 CYD 2.8 inch ILI9341 display (status bars)"
+            depends on IDF_TARGET_ESP32
+
         config HOMEHUB_LED_BACKEND_SENSECAP_ST7701
             bool "SenseCAP Indicator 4 inch ST7701S RGB display (status bars)"
             depends on IDF_TARGET_ESP32S3 && SPIRAM
@@ -231,6 +235,7 @@ menu "ESP32 Device SDK"
     config HOMEHUB_DISPLAY
         bool
         default y if HOMEHUB_LED_BACKEND_IDEASPARK_ST7789
+        default y if HOMEHUB_LED_BACKEND_CYD_ILI9341
         default y if HOMEHUB_LED_BACKEND_SENSECAP_ST7701
         default y if HOMEHUB_LED_BACKEND_RETERMINAL_UC8179
         default y if HOMEHUB_LED_BACKEND_RETERMINAL_SPECTRA6

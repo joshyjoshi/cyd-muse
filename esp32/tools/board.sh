@@ -28,12 +28,14 @@
 #              Seeed reTerminal E1001 (ESP32-S3) with a 7.5 inch e-paper
 #   reterminal-e1002
 #              Seeed reTerminal E1002 (ESP32-S3) with a 7.3 inch colour e-paper
+#   cyd        Sunton ESP32-2432S028 "Cheap Yellow Display" (classic ESP32)
+#              with a 2.8 inch ILI9341 and XPT2046 touch, 4 MB flash
 #
 # The action defaults to build. Without PORT, flash and monitor use the only
 # matching serial port, if there is exactly one.
 set -euo pipefail
 
-usage() { sed -n '16,33p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '16,35p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 [ $# -ge 1 ] || usage 2
 case "$1" in -h|--help) usage ;; esac
@@ -50,8 +52,11 @@ case "$BOARD" in
     TARGET=esp32c5
     PORTS="/dev/cu.usbmodem* /dev/ttyACM*"
     ;;
-  ideaspark|sensecap-indicator)
-    [ "$BOARD" = ideaspark ] && TARGET=esp32 || TARGET=esp32s3
+  ideaspark|sensecap-indicator|cyd)
+    case "$BOARD" in
+      ideaspark|cyd) TARGET=esp32 ;;
+      *)             TARGET=esp32s3 ;;
+    esac
     DEFAULTS="$DEFAULTS;devices/sdkconfig.$BOARD"
     # CH340 bridge. The SenseCAP Indicator's RP2040 shows up as a usbmodem, not here.
     PORTS="/dev/cu.usbserial-* /dev/cu.wchusbserial* /dev/ttyUSB*"

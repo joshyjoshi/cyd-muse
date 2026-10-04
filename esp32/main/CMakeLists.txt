@@ -85,6 +85,11 @@ if(CONFIG_HOMEHUB_LED_BACKEND_DEVKIT_GPIO27 OR CONFIG_HOMEHUB_LED_BACKEND_VOICE_
     list(APPEND GADGET_REQUIRES led_strip)
 endif()
 
+# The CYD's ILI9341 panel driver comes from the component registry, not IDF.
+if(CONFIG_HOMEHUB_LED_BACKEND_CYD_ILI9341)
+    list(APPEND GADGET_REQUIRES esp_lcd_ili9341)
+endif()
+
 if(CONFIG_HOMEHUB_SENSECAP_SENSORS)
     list(APPEND GADGET_SRCS "sensecap_sensors.c")
 endif()

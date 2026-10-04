@@ -1,0 +1,110 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Sunton ESP32-2432S028 ("Cheap Yellow Display", CYD) — the 2-USB variant.
+# Load last, after sdkconfig.defaults (see README.md in this directory).
+#
+# Hardware:
+#   Chip:       ESP32-D0WD-V3 (classic Xtensa dual core), rev v3.1
+#   Flash:      4 MB (GigaDevice), DIO
+#   PSRAM:      none
+#   Display:    2.8" 240x320 ILI9341 over SPI (HSPI)
+#                  MOSI 13, MISO 12, SCLK 14, CS 15, DC 2, RST -1, BL 21
+#   Touch:      XPT2046 on its OWN SPI bus (VSPI)
+#                  CLK 25, MOSI 32, MISO 39, CS 33, IRQ 36
+#   RGB LED:    discrete, active LOW — R 4, G 16, B 17
+#   LDR:        GPIO34 (analog, input only)
+#   Speaker:    SC8002B amp on GPIO26 (no speaker fitted on stock boards)
+#   microSD:    CS 5, MOSI 23, MISO 19, SCK 18
+#   Button:     BOOT on GPIO0 (active low, on-board pull-up), RESET hatched
+#   USB:        CH340 bridge, 1a86:7523 -> /dev/cu.wchusbserial*, usbserial*
+#
+# Pin sources: board silkscreen, plus the community CYD pinout
+# (https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display) and the
+# per-board notes in espboards.dev/esp32/cyd-esp32-2432s028. The touch bus was
+# verified on hardware: the XPT2046 is NOT on the display bus, and reading it
+# over HSPI returns the idle saturation value 8191 forever.
+#
+# This is a bench profile for a classic ESP32 (no PSRAM), so it overrides the
+# ESP32-C5 assumptions in sdkconfig.defaults; C5-only options there are ignored
+# for this target. Modelled on sdkconfig.ideaspark, the other no-PSRAM classic
+# ESP32 profile with a display.
+
+CONFIG_IDF_TARGET="esp32"
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+# Status on the 2.8" screen in edge bars. The CYD has a discrete active-LOW RGB
+# LED rather than an addressable one, so it can't use the DEVKIT_GPIO27
+# addressable backend, and its panel is an ILI9341 on its own pins rather than
+# the ideaspark's ST7789, so it has its own backend in main/led_status.c.
+CONFIG_HOMEHUB_LED_BACKEND_CYD_ILI9341=y
+# Advertise as <prefix>-Disp-XXXXXX so the board is distinguishable from real
+# devices while experimenting.
+CONFIG_HOMEHUB_BLE_NAME_SUFFIX="-Disp"
+# BOOT button on GPIO0, active low with the board's own pull-up.
+CONFIG_HOMEHUB_BUTTON_GPIO=0
+
+# Signed apps without Secure Boot use the Secure Boot V2 (RSA) scheme, which
+# classic ESP32 supports from chip revision 3.0. This board's D0WD-V3 is
+# rev v3.1, so the requirement is met.
+CONFIG_ESP32_REV_MIN_3=y
+
+# 4 MB flash. The reference partitions.csv ends at 4.13 MB (two 2 MB OTA slots
+# plus prod_data/prod_bak at fixed offsets), which does not fit this board, so
+# this profile uses its own single-app-slot table. That drops dual-OTA and
+# rollback: the board is flash-over-USB only. See partitions_cyd_4mb.csv.
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_cyd_4mb.csv"
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+
+# OTA is impossible with a single app slot, and is off by default for
+# non-UI boards anyway. Belt and braces.
+CONFIG_HOMEHUB_OTA_ENABLED=n
+
+# No PSRAM. mbedtls and every PSRAM-preferred buffer fall back to internal RAM.
+CONFIG_SPIRAM=n
+CONFIG_MBEDTLS_INTERNAL_MEM_ALLOC=y
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=n
+# 16 KB TLS records both ways would cost 32 KB of internal RAM per connection.
+# Servers may still send 16 KB records, so only shrink outbound.
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096
+
+# Release the classic Bluetooth controller memory; pairing is BLE only.
+CONFIG_BTDM_CTRL_MODE_BLE_ONLY=y
+CONFIG_BTDM_CTRL_MODE_BR_EDR_ONLY=n
+CONFIG_BTDM_CTRL_MODE_BTDM=n
+
+# Fewer static Wi-Fi RX buffers (1.6 KB each, always resident). The RX block-ack
+# window may be at most twice the static buffer count.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=8
+CONFIG_ESP_WIFI_RX_BA_WIN=16
+CONFIG_ESP_WIFI_TX_BA_WIN=16
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=16
+
+# The ESP32 has far less IRAM than the C5; keep lwIP and Wi-Fi hot paths in
+# flash so the image links.
+CONFIG_LWIP_IRAM_OPTIMIZATION=n
+CONFIG_LWIP_EXTRA_IRAM_OPTIMIZATION=n
+CONFIG_ESP_WIFI_IRAM_OPT=n
+CONFIG_ESP_WIFI_RX_IRAM_OPT=n
+
+# No PSRAM: the home-network tunnel and network discovery do not fit next to
+# the control session. Only the control API to the VM is available, so Muse can
+# reach and control this board but cannot use it to reach other LAN devices.
+CONFIG_HOMEHUB_TUNNEL=n
+
+# GPIO34-39 are input-only with no pull-ups on the classic ESP32. The XPT2046
+# IRQ (36) and MISO (39) are inputs, which is fine; nothing here drives them.
