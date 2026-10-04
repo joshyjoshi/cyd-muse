@@ -1220,7 +1220,19 @@ static void add_register_metadata_string(cJSON **metadata, cJSON *params,
     cJSON_AddStringToObject(*metadata, key, value);
 }
 
+// Names of the commands advertised in the register payload, for the log line
+// that makes a missing advertisement visible on the console.
+static char s_reg_names[256];
+
+static void note_register_command(const char *name) {
+    size_t used = strlen(s_reg_names);
+    if (used) strncat(s_reg_names, ", ", sizeof(s_reg_names) - used - 1);
+    used = strlen(s_reg_names);
+    strncat(s_reg_names, name, sizeof(s_reg_names) - used - 1);
+}
+
 static char *build_register_json(void) {
+    s_reg_names[0] = '\0';
     char wifi_ssid[sizeof(s_wifi_ssid)];
     copy_wifi_ssid(wifi_ssid, sizeof(wifi_ssid));
 
@@ -1329,12 +1341,14 @@ static char *build_register_json(void) {
                                 "Row to draw the top of the image at; default 0.");
 #endif
         cJSON_AddItemToObject(url_optional, "row", top_param);
+        note_register_command("display.draw_url");
         add_command(commands, "display.draw_url", desc, url_required, url_optional);
         // The six-colour e-paper may first finish a status screen refresh,
         // then takes as long again for the image.
         cJSON_AddNumberToObject(
             cJSON_GetObjectItem(commands, "display.draw_url"), "timeout_ms",
             bits == 4 ? 120000 : 60000);
+        note_register_command("display.show_animation");
         add_command(commands, "display.show_animation",
                     epaper ? "Clear the image and bring back the status screen "
                            "and the agent's name."
@@ -1352,6 +1366,7 @@ static char *build_register_json(void) {
                                 "Empty clears it and returns the line to the "
                                 "agent's name.");
         cJSON_AddItemToObject(text_required, "text", text_param);
+        note_register_command("display.show_text");
         add_command(commands, "display.show_text",
                     "Show a short line of text in place of the agent's name. "
                     "One centred line; the panel's title font is small, so "
@@ -1965,6 +1980,7 @@ static session_result_t run_session(stack_monitor_t *stack) {
                      (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA));
             goto cleanup;
         }
+        ESP_LOGI(TAG, "link.register advertises: [%s]", s_reg_names);
         control_tx = {reg_json, strlen(reg_json), 0, false, session_generation};
         control_tx.is_registration = true;
     }
